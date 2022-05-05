@@ -6,3 +6,22 @@ using Scikit Learn's feature selection to find the most variable features, and s
 features are selected, and no important features are missed.
 """
 
+import csv
+import pickle
+import pandas as pd
+
+
+if __name__ == 'main':
+
+    # Open the files of each dataset
+    case_file = pd.read_csv('../data/raw_data/Case.csv')
+    patient_file = pd.read_csv('../data/raw_data/PatientInfo.csv')
+    policy_file = pd.read_csv('../data/raw_data/Policy.csv')
+    region_file = pd.read_csv('../data/raw_data/Region.csv')
+    search_trend_file = pd.read_csv('../data/raw_data/SearchTrend.csv')
+    #seoul_file = pd.read_csv('../data/raw_data/SeoulFloating.csv')
+    test_file = pd.read_csv('../data/raw_data/Time.csv')
+    time_file = pd.read_csv('../data/raw_data/TimeAge.csv')
+    gender_file = pd.read_csv('../data/raw_data/TimeGender.csv')
+    providence_file = pd.read_csv('../data/raw_data/TimeProvince.csv')
+    weather_file = pd.read_csv('../data/raw_data/Weather.csv')
