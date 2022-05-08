@@ -10,6 +10,79 @@ import csv
 import pickle
 import pandas as pd
 from sklearn.feature_selection import VarianceThreshold
+import os
+
+
+def save_dataframe(dataframe: pd.DataFrame, directory: str, filename: str, df_list):
+    """This method is used to save a dataframe as both a pickle and a csv to the given directory.
+
+    :param dataframe - the dataframe to save
+    :param directory - the directory to save it to
+    :param filename - the name of the dataframe's file
+    :param df_list - the name of the list to store the dataframe in
+    """
+
+    # Make the directory if it doesn't exist
+    if not os.path.exists('../data/clean_csvs/' + directory):
+        os.mkdir('../data/clean_csvs/' + directory)
+    if not os.path.exists('../data/dataframes/' + directory):
+        os.mkdir('../data/dataframes/' + directory)
+
+    # Store the dataframe as a csv
+    dataframe.to_csv('../data/clean_csvs/' + directory + '/' + filename + '.csv')
+
+    # Pickle the dataframe
+    dataframe.to_pickle('../data/dataframes/' + directory + '/' + filename + '.pkl')
+
+    # Save the dataframe in the provided list
+    if df_list is not None: df_list += [dataframe]
+
+
+def get_rolling_average(dataframe: pd.DataFrame, cols: list, n):
+    """This method returns a new dataframe which is the save as the provided dataframe, except that all specified rows
+    have a n-rolling average applied to them, backwards. Elements which are too close to the start to be averaged are
+    averaged as to as close to n as they can.
+
+    :param dataframe - the dataframe to copy
+    :param cols: a list of column names to apply a rolling average to
+    :param n: the size of the rolling average to apply
+    """
+
+    # Get a copy of the given dataframe
+    df_copy = dataframe.copy()
+
+    # Starting at the lowest possible value, find the rolling average of all rows
+    for index in range(n-1, dataframe.shape[0]):
+
+        # For all columns specified...
+        for col in cols:
+
+            # Find the sum of the previous n values
+            col_sum = 0
+            for prev in range(index-(n-1), index): col_sum += dataframe.iloc[prev][col]
+
+            # Set the average as the new value for the copied dataframe
+            df_copy.iloc[index][col] = col_sum / n
+
+    # Deal with all indices prior to the n-1th index
+    for index in range(n-1):
+
+        # For all columns specified...
+        for col in cols:
+
+            # Find the sum of the previous n values
+            col_sum = 0
+            for prev in range(index+1): col_sum += dataframe.iloc[prev][col]
+
+            # Set the average as the new value for the copied dataframe
+            df_copy.iloc[index][col] = col_sum / (index+1)
+
+    # Return the new dataframe
+    return df_copy
+
+
+def get_regional_total(dataframes: list, cols: list):
+    """Returns a dataframe who's columns are the total values of"""
 
 
 if __name__ == '__main__':
@@ -30,8 +103,10 @@ if __name__ == '__main__':
 
     # endregion Open the files of each dataset
 
-    # region Create Regional Datasets
+    # region Features Extraction
     """Create a dataset for each region, wherein each day of time is one datapoint."""
+
+    # region Regional Features
 
     # Find the number of unique regions
     regions = province_df['province'].unique()
@@ -39,40 +114,83 @@ if __name__ == '__main__':
     # Store the list of regions as a pickled list
     with open('../data/region_list.pkl', 'wb') as file: pickle.dump(regions, file)
 
-    # For each region, make a dataframe, a file, and save each
+    # Create a list of regional dataframes for each feature
+    daily_counts = []
+    daily_rates = []
+    daily_rates_3dra = []
+    daily_rates_7dra = []
+
+    # Extract features from each region
     for region in regions:
+
+        # region Get Daily Covid Counts
         
         # Create a new dataframe from the province dataframe
-        df = province_df[province_df['province'] == region].drop(['province', 'date', 'time'], axis=1)
-        df.reset_index(drop=True, inplace=True)
-        df.index.name = 'index'
-        
-        # Store the case counts over time as a csv
-        df.to_csv('../data/clean_csvs/absolute/' + region + '.csv')
+        df_counts = province_df[province_df['province'] == region].drop(['province', 'date', 'time'], axis=1)
+        df_counts.reset_index(drop=True, inplace=True)
+        df_counts.index.name = 'index'
 
-        # Pickle the case counts over time
-        df.to_pickle('../data/dataframes/absolute/' + region + '.pkl')
+        # Save the dataframe
+        save_dataframe(df_counts, 'daily_counts', region, daily_counts)
+
+        # endregion Get Daily Covid Counts
+
+        # region Daily Covid Rates
 
         # Change the dataframe into changes in cases over time
-        df_rates = df.copy()
-        for i in range(1, df.shape[0]): df_rates.iloc[i, :] = df.iloc[i, :] - df.iloc[i-1, :]
+        df_rates = df_counts.copy()
+        for i in range(1, df_counts.shape[0]): df_rates.iloc[i, :] = df_counts.iloc[i, :] - df_counts.iloc[i-1, :]
         df_rates.iloc[0, :] = df_rates.iloc[1, :]
 
-        # Store the case counts over time as a csv
-        df_rates.to_csv('../data/clean_csvs/relative/' + region + '.csv')
+        # Save the dataframe
+        save_dataframe(df_rates, 'daily_rates', region, daily_rates)
 
-        # Pickle the case counts over time
-        df_rates.to_pickle('../data/dataframes/relative/' + region + '.pkl')
+        # endregion Daily Covid Rates
 
-    # Create a dataframe of all summed cases
-    total_df = test_df.loc[:, 'confirmed':'deceased']
-    total_df.reset_index(drop=True, inplace=True)
-    total_df.index.name = 'index'
+        # region 3 Day Rolling Average Covid Rates
 
-    # Store the dataframe as a csv
-    total_df.to_csv('../data/clean_csvs/absolute/Total.csv')
+        # Get the 3 day rolling average of the covid rates
+        df_ra_rates = get_rolling_average(df_rates, df_rates.columns, 3)
 
-    # Pickle the dataframe
-    total_df.to_pickle('../data/dataframes/absolute/Total.pkl')
+        # Save the dataframe
+        save_dataframe(df_ra_rates, '3_day_rolling_average_rates', region, daily_rates_3dra)
 
-    # region Create Regional Datasets
+        # endregion 3 Day Rolling Average Covid Rates
+
+        # region 7 Day Rolling Average Covid Rates
+
+        # Get the week-long rolling average of covid rates
+        df_ra_rates = get_rolling_average(df_rates, df_rates.columns, 7)
+
+        # Save the dataframe
+        save_dataframe(df_ra_rates, '7_day_rolling_average_rates', region, daily_rates_7dra)
+
+        # endregion 7 Day Rolling Average Covid Rates
+
+    # region Total Regional Features
+
+    # Find and store the total daily counts
+    daily_count_total = pd.DataFrame()
+    for df in daily_counts: daily_count_total = daily_count_total.add(df, fill_value=0)
+    save_dataframe(daily_count_total, 'daily_counts', 'Total', None)
+
+    # Find and store the total daily counts
+    daily_rates_total = pd.DataFrame()
+    for df in daily_rates: daily_rates_total = daily_rates_total.add(df, fill_value=0)
+    save_dataframe(daily_rates_total, 'daily_rates', 'Total', None)
+
+    # Find and store the total daily counts
+    daily_rates_3dra_total = pd.DataFrame()
+    for df in daily_rates_3dra: daily_rates_3dra_total = daily_rates_3dra_total.add(df, fill_value=0)
+    save_dataframe(daily_rates_3dra_total, '3_day_rolling_average_rates', 'Total', None)
+
+    # Find and store the total daily counts
+    daily_rates_7dra_total = pd.DataFrame()
+    for df in daily_rates_7dra: daily_rates_7dra_total = daily_rates_7dra_total.add(df, fill_value=0)
+    save_dataframe(daily_rates_7dra_total, '7_day_rolling_average_rates', 'Total', None)
+
+    # endregion Total Regional Features
+
+    # endregion Regional Features
+
+    # endregion Feature Extraction
