@@ -6,10 +6,8 @@ using Scikit Learn's feature selection to find the most variable features, and s
 features are selected, and no important features are missed.
 """
 
-import csv
 import pickle
 import pandas as pd
-from sklearn.feature_selection import VarianceThreshold
 import os
 
 
